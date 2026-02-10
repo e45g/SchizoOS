@@ -14,16 +14,15 @@ EFI_CRT = $(EFI_LIB)/crt0-efi-$(ARCH).o
 EFI_LDS = $(EFI_LIB)/elf_$(ARCH)_efi.lds
 
 # srcs + build
-BUILD_DIR ?= ../build
-BOOT_DIR = $(BUILD_DIR)/bootloader
+BUILD_DIR ?= ../build/bootloader
 SRCS = $(wildcard src/*.c)
-OBJS = $(patsubst src/%.c,$(BOOT_DIR)/%.o,$(SRCS))
+OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(SRCS))
 
-SO = $(BOOT_DIR)/bootloader.so
-EFI = $(BOOT_DIR)/$(TARGET)
+SO = $(BUILD_DIR)/bootloader.so
+EFI = $(BUILD_DIR)/$(TARGET)
 
 # flags
-CFLAGS ?= -I$(EFI_INC) -I$(EFI_INC_ARCH) \
+CFLAGS = -I$(EFI_INC) -I$(EFI_INC_ARCH) \
 		 -fpic \
 		 -ffreestanding \
 		 -fno-stack-protector -fno-stack-check -mno-red-zone \
@@ -34,7 +33,7 @@ CFLAGS ?= -I$(EFI_INC) -I$(EFI_INC_ARCH) \
 		 -m64 \
 		 -c
 
-LDFLAGS ?= -shared \
+LDFLAGS = -shared \
           -Bsymbolic \
 		  -nostdlib \
 		  -L$(EFI_LIB) -T$(EFI_LDS) \
@@ -46,8 +45,8 @@ LIBS = -lgnuefi -lefi
 
 all: $(EFI)
 
-$(BOOT_DIR):
-	mkdir -p $(BOOT_DIR)
+build:
+	mkdir -p $(BUILD_DIR)
 
 $(EFI): $(SO)
 	$(OBJCOPY) \
@@ -63,5 +62,5 @@ $(EFI): $(SO)
 $(SO): $(OBJS)
 	$(LD) $(LDFLAGS) $^ -o $@ $(LIBS)
 
-$(BOOT_DIR)/%.o: src/%.c | $(BOOT_DIR)
+$(BUILD_DIR)/%.o: src/%.c | build
 	$(CC) $(CFLAGS) -o $@ $<

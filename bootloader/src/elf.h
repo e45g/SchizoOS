@@ -5,6 +5,8 @@
 
 #define ELF_MAGIC 0x464C457F
 
+#define PT_LOAD 0x1
+
 // https://en.wikipedia.org/wiki/Executable_and_Linkable_Format
 typedef struct __attribute__((packed)) { // to make sure compiler doesnt act up
     UINT32 magic;

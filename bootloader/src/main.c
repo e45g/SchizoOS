@@ -1,10 +1,20 @@
 #include "elf.h"
+#include "x86_64/efibind.h"
 #include <efi.h>
 #include <efilib.h>
 
+typedef struct {
+    UINT64 framebuffer_base;
+    UINT64 framebuffer_size;
+    UINT32 width;
+    UINT32 height;
+    UINT32 pixels_per_scanline;
+} boot_info_t;
+typedef void (*kernel_entry_t)(boot_info_t *);
 
 EFI_STATUS
 EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
+    boot_info_t boot_info = {0};
     EFI_STATUS status;
     InitializeLib(ImageHandle, SystemTable);
     Print(L"[Boot] UEFI Bootloader starting...\r\n");
@@ -18,6 +28,12 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"[Error] Could not locate GOP: %r\r\n", status);
         goto halt;
     }
+    boot_info.framebuffer_base = gop->Mode->FrameBufferBase;
+    boot_info.framebuffer_size = gop->Mode->FrameBufferSize;
+    boot_info.width = gop->Mode->Info->HorizontalResolution;
+    boot_info.height = gop->Mode->Info->VerticalResolution;
+    boot_info.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
+
     Print(L"[Ok] GOP: %dx%d, FB at 0x%lx\r\n",
           gop->Mode->Info->HorizontalResolution,
           gop->Mode->Info->VerticalResolution,
@@ -50,7 +66,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     }
 
     EFI_FILE_HANDLE kernel_file;
-    status = uefi_call_wrapper(root->Open, 5, root, &kernel_file, L"\\kernel.elf", EFI_FILE_MODE_READ, EFI_FILE_READ_ONLY);
+    status = uefi_call_wrapper(root->Open, 5, root, &kernel_file, L"\\kernel.elf", EFI_FILE_MODE_READ, 0);
     if(EFI_ERROR(status)) {
         Print(L"[Error] Could not open kernel.elf\r\n");
         goto halt;
@@ -85,11 +101,12 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     UINT8 *kernel_buffer;
     status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, kernel_file_size, (void **)&kernel_buffer);
     if (EFI_ERROR(status)) {
-        Print(L"[Error] Could not allocate for kernel buffer\r\n");
+        Print(L"[Error] Could not allocate memory for kernel buffer\r\n");
         goto halt;
     }
 
-    status = uefi_call_wrapper(kernel_file->Read, 3, kernel_file, kernel_file_size, kernel_buffer);
+    UINTN read_size = kernel_file_size;
+    status = uefi_call_wrapper(kernel_file->Read, 3, kernel_file, &read_size, kernel_buffer);
     if (EFI_ERROR(status)) {
         Print(L"[Error] Could not read kernel file\r\n");
         goto halt;
@@ -104,6 +121,102 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     }
     Print(L"[Ok] Valid ELF64, entry: 0x%lx\r\n", elf->entry);
 
+    elf64_phdr_t *phdr = (elf64_phdr_t *)(kernel_buffer + elf->phoff);
+    UINTN mem_start = INT64_MAX;
+    UINTN mem_end = 0;
+    UINTN memory_needed = 0;
+    UINT64 max_align = 4096;
+    for(INT32 i = 0; i < elf->phnum; i++, phdr++) {
+        if(phdr->type == PT_LOAD) {
+            if(phdr->align > max_align) max_align = phdr->align;
+
+            UINT64 segment_start = phdr->vaddr;
+            UINT64 segment_end = phdr->vaddr + phdr->memsz;
+
+            segment_start = segment_start & ~(max_align - 1);
+            segment_end = (segment_end + max_align - 1) & ~(max_align - 1);
+
+            if(segment_start < mem_start) mem_start = segment_start;
+            if(segment_end > mem_end) mem_end = segment_end;
+        }
+    }
+    memory_needed = mem_end - mem_start;
+    Print(L"[Ok] Memory needed by program headers: %ld\r\n", memory_needed);
+
+    UINT8 *program_mem_buffer;
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, memory_needed, (void **)&program_mem_buffer);
+    if (EFI_ERROR(status)) {
+        Print(L"[Error] Could not allocate memory for program buffer\r\n");
+        goto halt;
+    }
+
+    phdr = (elf64_phdr_t *)(kernel_buffer + elf->phoff);
+    for(INT32 i = 0; i < elf->phnum; i++, phdr++) {
+        if(phdr->type == PT_LOAD) {
+            UINT64 rel_off = phdr->vaddr - mem_start;
+            UINT8 *src = kernel_buffer + phdr->offset;
+            UINT8 *dst = program_mem_buffer + rel_off;
+            UINT64 len = phdr->filesz;
+
+            status = uefi_call_wrapper(BS->CopyMem, 3, dst, src, len);
+            if (EFI_ERROR(status)) {
+                Print(L"[Error] Could not allocate memory for program buffer\r\n");
+                goto halt;
+            }
+
+            Print(L"[Ok] Loaded %p to %p len: %x, offset: %ld, flags 0x%02x\n", src, dst, len, rel_off, phdr->flags);
+        }
+    }
+
+    Print(L"[Ok] Program memory: %p, entry offset: %x, start: 0x%x\n", program_mem_buffer, elf->entry, mem_start);
+
+
+    UINTN map_size = 0;
+    EFI_MEMORY_DESCRIPTOR *mem_map = NULL;
+    UINTN map_key;
+    UINTN desc_size;
+    UINT32 desc_version;
+    status = uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
+    if(!(status == EFI_BUFFER_TOO_SMALL || status == EFI_SUCCESS)) {
+        Print(L"[Error] Could not get memory map (before alloc)\r\n");
+        goto halt;
+    }
+
+    // If the MemoryMap buffer is too small, the EFI_BUFFER_TOO_SMALL error code is returned and the MemoryMap-
+    // Size value contains the size of the buffer needed to contain the current memory map. The actual size of the buffer
+    // allocated for the consequent call to GetMemoryMap() should be bigger then the value returned in MemoryMapSize,
+    // since allocation of the new buffer may potentially increase memory map size.
+    map_size += 4096;
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, map_size, (void **)&mem_map);
+    if (EFI_ERROR(status)) {
+        Print(L"[Error] Could not allocate memory for memory map\r\n");
+        goto halt;
+    }
+
+    status = uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
+    if(EFI_ERROR(status)) {
+        Print(L"[Error] Could not get memory map\r\n");
+        goto halt;
+    }
+
+    Print(L"[Ok] Jumping to kernel...\r\n");
+
+    status = uefi_call_wrapper(BS->ExitBootServices, 2, ImageHandle, map_key);
+    if (EFI_ERROR(status)) {
+        // Memory map changed, try again
+        map_size = 0;
+        uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, NULL, &map_key, &desc_size, &desc_version);
+        map_size += 4096;
+        uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, map_size, (void **)&mem_map);
+        uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
+        status = uefi_call_wrapper(BS->ExitBootServices, 2, ImageHandle, map_key);
+        if (EFI_ERROR(status)) {
+            goto halt;
+        }
+    }
+
+    kernel_entry_t kernel_entry = (kernel_entry_t) ((UINT8*)program_mem_buffer + (elf->entry - mem_start));
+    kernel_entry(&boot_info);
 
 halt:
     for(;;) __asm__ volatile("hlt");
