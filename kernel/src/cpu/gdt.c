@@ -1,37 +1,32 @@
 #include <cpu/gdt.h>
+#include <libk/stdio.h>
 #include <common.h>
 
-// flag 0-7 access byte
-// flag 8-11 flag
-uint64_t create_descriptor(uint32_t base, uint32_t limit, uint16_t flag) {
-    uint64_t descriptor = 0;
-
-    descriptor = limit & 0xF0000;
-    descriptor |= (flag << 8) & 0xF0FF00;
-    descriptor |= (base >> 16) & 0xFF;
-    descriptor |= base & 0xFF000000;
-
-    descriptor <<= 32;
-
-    descriptor |= base << 16;
-    descriptor |= limit & 0xFFFF;
-
-    return descriptor;
+void create_gdt_entry(gdt_entry_t *entry, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags) {
+    entry->limit_low = limit & 0xFFFF;
+    entry->base_low = base & 0xFFFF;
+    entry->base_mid = (base >> 16) & 0xFF;
+    entry->access = access;
+    entry->limit_high_flags = ((flags & 0xF) << 4) | ((limit >> 16) & 0xF);
+    entry->base_high = (base>>24) & 0xFF;
 }
 
-static uint64_t gdt[3] = {0};
-static gdt_ptr_t gdt_dscr = {.size = sizeof(gdt)-1, .offset = (uint64_t)&gdt};
+static gdt_entry_t gdt[3] = {0};
+static gdtr_t gdtr;
 
 
 void load_gdt()
 {
-    gdt[0] = create_descriptor(0, 0, 0);
-    gdt[1] = create_descriptor(0, 0xFFFFF, 0xA9A);
-    gdt[2] = create_descriptor(0, 0xFFFFF, 0xA92);
+    create_gdt_entry(&gdt[0], 0, 0, 0, 0);
+    create_gdt_entry(&gdt[1], 0, 0xFFFFF, KERNEL_CODE_SEG, FLAG);
+    create_gdt_entry(&gdt[2], 0, 0xFFFFF, KERNEL_DATA_SEG, FLAG);
 
-    asm volatile("lgdt %0" : : "m"(gdt_dscr));
+    gdtr.size = sizeof(gdt) - 1;
+    gdtr.offset = (uint64_t)&gdt;
 
-    asm volatile(
+    __asm__ volatile("lgdt %0" : : "m"(gdtr));
+
+    __asm__ volatile(
         "pushq $0x08\n\t"
         "leaq 1f(%%rip), %%rax\n\t"
         "pushq %%rax\n\t"
