@@ -1,1 +1,6 @@
 -I./src/include
+-ffreestanding
+-nostdlib
+-fno-stack-protector
+-mno-red-zone
+-m64

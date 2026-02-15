@@ -4,6 +4,7 @@ section .text
 global _start
 
 _start:
+    cli
     mov rsp, kernel_stack_top
     call kmain
 

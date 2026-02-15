@@ -4,11 +4,25 @@
 #include <common.h>
 
 typedef struct {
-    uint64_t framebuffer_base;
-    uint64_t framebuffer_size;
+    void* base_address;
+    uint64_t buffer_size;
     uint32_t width;
     uint32_t height;
     uint32_t pixels_per_scanline;
+} framebuffer_t;
+
+typedef struct {
+    void* map_begin;
+    uint64_t map_size;
+    uint64_t descriptor_size;
+} memory_map_t;
+
+typedef struct {
+    framebuffer_t framebuffer;
+    memory_map_t  memory_map;
+    void* rsdp;
 } boot_info_t;
+
+framebuffer_t* get_framebuffer();
 
 #endif

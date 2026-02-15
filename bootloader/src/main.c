@@ -4,12 +4,25 @@
 #include <efilib.h>
 
 typedef struct {
-    UINT64 framebuffer_base;
-    UINT64 framebuffer_size;
-    UINT32 width;
-    UINT32 height;
-    UINT32 pixels_per_scanline;
+    void* base_address;
+    uint64_t buffer_size;
+    uint32_t width;
+    uint32_t height;
+    uint32_t pixels_per_scanline;
+} framebuffer_t;
+
+typedef struct {
+    void* map_begin;
+    uint64_t map_size;
+    uint64_t descriptor_size;
+} memory_map_t;
+
+typedef struct {
+    framebuffer_t framebuffer;
+    memory_map_t  memory_map;
+    void* rsdp;
 } boot_info_t;
+
 typedef void (*kernel_entry_t)(boot_info_t *);
 
 EFI_STATUS
@@ -28,11 +41,11 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"[Error] Could not locate GOP: %r\r\n", status);
         goto halt;
     }
-    boot_info.framebuffer_base = gop->Mode->FrameBufferBase;
-    boot_info.framebuffer_size = gop->Mode->FrameBufferSize;
-    boot_info.width = gop->Mode->Info->HorizontalResolution;
-    boot_info.height = gop->Mode->Info->VerticalResolution;
-    boot_info.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
+    boot_info.framebuffer.base_address = (void*)gop->Mode->FrameBufferBase;
+    boot_info.framebuffer.buffer_size = gop->Mode->FrameBufferSize;
+    boot_info.framebuffer.width = gop->Mode->Info->HorizontalResolution;
+    boot_info.framebuffer.height = gop->Mode->Info->VerticalResolution;
+    boot_info.framebuffer.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
 
     Print(L"[Ok] GOP: %dx%d, FB at 0x%lx\r\n",
           gop->Mode->Info->HorizontalResolution,

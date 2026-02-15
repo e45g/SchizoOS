@@ -2,7 +2,7 @@ ARCH ?= x86_64
 TARGET = kernel.elf
 
 # toolchain
-CC ?= gcc
+CC = gcc
 LD ?= ld
 NASM ?= nasm
 OBJCOPY ?= objcopy
