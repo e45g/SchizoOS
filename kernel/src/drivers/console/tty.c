@@ -1,7 +1,27 @@
+#include "boot.h"
 #include <video.h>
 #include <tty.h>
 
 static struct tty tty = {.x=0, .y = 0, .fg = TTY_WHITE, .bg = 0x00000066};
+
+void tty_scroll() {
+    framebuffer_t *fb = get_framebuffer();
+    uint32_t *pixels = (uint32_t *)fb->base_address;
+    uint32_t line_size = fb->pixels_per_scanline;
+
+    // move up
+    uint32_t move_count = (fb->height - 16) * line_size;
+    for (uint32_t i = 0; i < move_count; i++) {
+        pixels[i] = pixels[i + (16 * line_size)];
+    }
+
+    // clear the last line
+    uint32_t last_line_start = (fb->height - 16) * line_size;
+    uint32_t total_pixels = fb->height * line_size;
+    for (uint32_t i = last_line_start; i < total_pixels; i++) {
+        pixels[i] = tty.bg;
+    }
+}
 
 void tty_putc(char c) {
     framebuffer_t *fb = get_framebuffer();
@@ -19,9 +39,9 @@ void tty_putc(char c) {
         tty.y += 16;
     }
 
-    if (tty.y + 16 >= (int)fb->height) {
-        tty_clear();
-        tty.y = 0;
+    if (tty.y + 16 > (int)fb->height) {
+        tty_scroll();
+        tty.y -= 16;
     }
 }
 
