@@ -135,53 +135,56 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     Print(L"[Ok] Valid ELF64, entry: 0x%lx\r\n", elf->entry);
 
     elf64_phdr_t *phdr = (elf64_phdr_t *)(kernel_buffer + elf->phoff);
-    UINTN mem_start = INT64_MAX;
-    UINTN mem_end = 0;
-    UINTN memory_needed = 0;
-    UINT64 max_align = 4096;
+    UINTN v_mem_start = INT64_MAX;
+    UINTN v_mem_end = 0;
+    UINTN p_mem_start = INT64_MAX;
+    UINTN p_mem_end = 0;
     for(INT32 i = 0; i < elf->phnum; i++, phdr++) {
         if(phdr->type == PT_LOAD) {
-            if(phdr->align > max_align) max_align = phdr->align;
+            if(phdr->vaddr < v_mem_start) v_mem_start = phdr->vaddr;
+            if(phdr->vaddr > v_mem_end) v_mem_end = phdr->vaddr;
 
-            UINT64 segment_start = phdr->vaddr;
-            UINT64 segment_end = phdr->vaddr + phdr->memsz;
-
-            segment_start = segment_start & ~(max_align - 1);
-            segment_end = (segment_end + max_align - 1) & ~(max_align - 1);
-
-            if(segment_start < mem_start) mem_start = segment_start;
-            if(segment_end > mem_end) mem_end = segment_end;
+            if(phdr->paddr < p_mem_start) p_mem_start = phdr->paddr;
+            if(phdr->paddr > p_mem_end) p_mem_end = phdr->paddr;
         }
     }
-    memory_needed = mem_end - mem_start;
+    UINTN memory_needed = p_mem_end - p_mem_start;
     Print(L"[Ok] Memory needed by program headers: %ld\r\n", memory_needed);
 
-    UINT8 *program_mem_buffer;
-    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, memory_needed, (void **)&program_mem_buffer);
+    EFI_PHYSICAL_ADDRESS kernel_load_address = p_mem_start;
+    UINTN pages_needed = (memory_needed + 0xFFF) / 0x1000;
+    status = uefi_call_wrapper(BS->AllocatePages, 4, AllocateAddress, EfiLoaderData, pages_needed, &kernel_load_address);
     if (EFI_ERROR(status)) {
-        Print(L"[Error] Could not allocate memory for program buffer\r\n");
+        Print(L"[Error] Could not allocate memory for program buffer at 0x%lx: %r\r\n", p_mem_start, status);
         goto halt;
     }
 
     phdr = (elf64_phdr_t *)(kernel_buffer + elf->phoff);
     for(INT32 i = 0; i < elf->phnum; i++, phdr++) {
         if(phdr->type == PT_LOAD) {
-            UINT64 rel_off = phdr->vaddr - mem_start;
             UINT8 *src = kernel_buffer + phdr->offset;
-            UINT8 *dst = program_mem_buffer + rel_off;
+            UINT8 *dst = (UINT8 *)phdr->paddr;
             UINT64 len = phdr->filesz;
 
             status = uefi_call_wrapper(BS->CopyMem, 3, dst, src, len);
             if (EFI_ERROR(status)) {
-                Print(L"[Error] Could not allocate memory for program buffer\r\n");
+                Print(L"[Error] Could not copy segment: %r\r\n", status);
                 goto halt;
             }
 
-            Print(L"[Ok] Loaded %p to %p len: %x, offset: %ld, flags 0x%02x\n", src, dst, len, rel_off, phdr->flags);
+            if(phdr->memsz > phdr->filesz) {
+                status = uefi_call_wrapper(BS->SetMem, 3, dst + len, phdr->memsz - phdr->filesz, 0);
+                if (EFI_ERROR(status)) {
+                    Print(L"[Error] Could not zero BSS: %r\r\n", status);
+                    goto halt;
+                }
+            }
+
+            Print(L"[Ok] Loaded segment to 0x%lx, size: %ld\n", dst, len);
         }
     }
 
-    Print(L"[Ok] Program memory: %p, entry offset: %x, start: 0x%x\n", program_mem_buffer, elf->entry, mem_start);
+    Print(L"[Ok] Program loaded to 0x%lx, entry: 0x%lx\n", p_mem_start, elf->entry);
 
 
     UINTN map_size = 0;
@@ -228,7 +231,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         }
     }
 
-    kernel_entry_t kernel_entry = (kernel_entry_t) ((UINT8*)program_mem_buffer + (elf->entry - mem_start));
+    kernel_entry_t kernel_entry = (kernel_entry_t)elf->entry;
     kernel_entry(&boot_info);
 
 halt:

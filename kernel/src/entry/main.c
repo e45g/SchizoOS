@@ -1,3 +1,4 @@
+#include <cpu/idt.h>
 #include <common.h>
 #include <boot.h>
 #include <tty.h>
@@ -11,10 +12,13 @@ void kmain(boot_info_t *boot_info) {
 
     tty_clear();
 
-    load_gdt();
-    printf("[Ok] GDT loaded\n");
+    uintptr_t gdtr_addr = gdt_init();
+    printf("[Ok] GDT loaded at %p\n", gdtr_addr);
 
-    printf("Welcome to SchizoOS\n");
+    uintptr_t idtr_addr = idt_init();
+    printf("[Ok] IDT loaded at %p\n", idtr_addr);
+
+    printf("\nWelcome to SchizoOS\n");
 
     for (;;) __asm__ volatile ("hlt");
 }

@@ -1,5 +1,3 @@
-[ ] console/logging - like printf
-[ ] GDT
 [ ] IDT
 [ ] Interrupts
 [ ] Paging

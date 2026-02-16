@@ -26,6 +26,9 @@ CFLAGS = -I./src/include -ffreestanding \
                 -Wall \
                 -Wextra \
                 -m64 \
+                -mno-sse \
+                -mno-mmx \
+                -mgeneral-regs-only \
                 -c
 
 NASMFLAGS = -f elf64 \
@@ -38,16 +41,22 @@ LDFLAGS = -nostdlib \
 
 all: $(ELF)
 
-$(ELF): $(OBJS)
+$(ELF): $(OBJS) | $(BUILD_DIR)
 	$(LD) $(LDFLAGS) $^ -o $@
 
-$(BUILD_DIR)/%.o: src/%.c
-	mkdir -p $(dir $@)
+$(BUILD_DIR):
+	mkdir -p $@
+
+$(BUILD_DIR)/%.o: src/%.c | $(BUILD_DIR)
+	@mkdir -p $(@D)
 	$(CC) $(CFLAGS) -o $@ $<
 
-$(BUILD_DIR)/%.o: src/%.asm
-	mkdir -p $(dir $@)
+$(BUILD_DIR)/%.o: src/%.asm | $(BUILD_DIR)
+	@mkdir -p $(@D)
 	$(NASM) $(NASMFLAGS) -o $@ $<
+
+$(BUILD_DIR):
+	mkdir -p $@
 
 clean:
 	rm -rf $(BUILD_DIR)

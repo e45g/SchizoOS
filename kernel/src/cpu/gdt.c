@@ -2,7 +2,7 @@
 #include <libk/stdio.h>
 #include <common.h>
 
-void create_gdt_entry(gdt_entry_t *entry, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags) {
+void gdt_create_entry(gdt_entry_t *entry, uint32_t base, uint32_t limit, uint8_t access, uint8_t flags) {
     entry->limit_low = limit & 0xFFFF;
     entry->base_low = base & 0xFFFF;
     entry->base_mid = (base >> 16) & 0xFF;
@@ -15,14 +15,14 @@ static gdt_entry_t gdt[3] = {0};
 static gdtr_t gdtr;
 
 
-void load_gdt()
+uintptr_t gdt_init()
 {
-    create_gdt_entry(&gdt[0], 0, 0, 0, 0);
-    create_gdt_entry(&gdt[1], 0, 0xFFFFF, KERNEL_CODE_SEG, FLAG);
-    create_gdt_entry(&gdt[2], 0, 0xFFFFF, KERNEL_DATA_SEG, FLAG);
+    gdt_create_entry(&gdt[0], 0, 0, 0, 0);
+    gdt_create_entry(&gdt[1], 0, 0xFFFFF, KERNEL_CODE_SEG, FLAG);
+    gdt_create_entry(&gdt[2], 0, 0xFFFFF, KERNEL_DATA_SEG, FLAG);
 
     gdtr.size = sizeof(gdt) - 1;
-    gdtr.offset = (uint64_t)&gdt;
+    gdtr.offset = (uintptr_t)&gdt;
 
     __asm__ volatile("lgdt %0" : : "m"(gdtr));
 
@@ -40,5 +40,5 @@ void load_gdt()
         :
         : "rax", "memory"
     );
+    return (uintptr_t)&gdtr;
 }
-

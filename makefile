@@ -11,6 +11,7 @@ ISO_DIR = $(BUILD_DIR)/iso
 EFI_IMG = $(ISO_DIR)/efi.img
 BOOTLOADER_DIR = bootloader
 KERNEL_DIR = kernel
+KERNEL_ELF = $(BUILD_DIR)/kernel/kernel.elf
 EFI = $(BUILD_DIR)/bootloader/BOOTX64.EFI
 ISO = SchizoOS.iso
 
@@ -34,8 +35,8 @@ iso: $(EFI) $(KERNEL_ELF)
 	dd if=/dev/zero of=$(EFI_IMG) bs=1M count=4
 	mformat -i $(EFI_IMG) ::
 	mmd -i $(EFI_IMG) ::/EFI ::/EFI/BOOT
-	mcopy -i $(EFI_IMG) ${EFI} ::/EFI/BOOT/BOOTX64.EFI
-	mcopy -i $(EFI_IMG) build/kernel/kernel.elf ::/kernel.elf
+	mcopy -i $(EFI_IMG) $(EFI) ::/EFI/BOOT/BOOTX64.EFI
+	mcopy -i $(EFI_IMG) $(KERNEL_ELF) ::/kernel.elf
 	xorriso -as mkisofs -o $(ISO) --efi-boot efi.img \
 	    -efi-boot-part --efi-boot-image $(ISO_DIR)
 
@@ -50,4 +51,5 @@ debug: iso
 	    -bios $(OVMF) \
 	    -cdrom $(ISO) \
 	    -net none \
-	    -serial stdio
+	    -serial stdio \
+		-d int -no-shutdown -no-reboot

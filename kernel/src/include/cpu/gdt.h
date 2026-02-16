@@ -1,5 +1,5 @@
-#ifndef CPU_H
-#define CPU_H
+#ifndef GDT_H
+#define GDT_H
 
 #include <common.h>
 
@@ -44,6 +44,6 @@ typedef struct {
     uint64_t offset;
 } __attribute__((packed)) gdtr_t;
 
-void load_gdt();
+uintptr_t gdt_init();
 
 #endif
