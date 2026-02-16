@@ -4,6 +4,7 @@ ENTRY(_start)
 SECTIONS
 {
     . = 0x100000;
+    _kernel_start = .;
 
     .text : {
         *(.text*)
@@ -21,4 +22,6 @@ SECTIONS
         *(.bss*)
         *(COMMON)
     }
+
+    _kernel_end = .;
 }

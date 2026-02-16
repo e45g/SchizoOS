@@ -1,4 +1,4 @@
-#include "boot.h"
+#include <boot.h>
 #include <video.h>
 #include <tty.h>
 

@@ -214,6 +214,9 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"[Error] Could not get memory map\r\n");
         goto halt;
     }
+    boot_info.memory_map.map_size = map_size;
+    boot_info.memory_map.descriptor_size = desc_size;
+    boot_info.memory_map.map_begin = mem_map;
 
     Print(L"[Ok] Jumping to kernel...\r\n");
 
@@ -225,6 +228,10 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         map_size += 4096;
         uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, map_size, (void **)&mem_map);
         uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
+
+        boot_info.memory_map.map_size = map_size;
+        boot_info.memory_map.descriptor_size = desc_size;
+        boot_info.memory_map.map_begin = mem_map;
         status = uefi_call_wrapper(BS->ExitBootServices, 2, ImageHandle, map_key);
         if (EFI_ERROR(status)) {
             goto halt;

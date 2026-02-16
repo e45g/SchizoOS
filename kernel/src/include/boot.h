@@ -24,5 +24,6 @@ typedef struct {
 } boot_info_t;
 
 framebuffer_t* get_framebuffer();
+memory_map_t* get_memmap();
 
 #endif
