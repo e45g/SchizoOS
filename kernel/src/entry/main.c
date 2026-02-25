@@ -12,16 +12,16 @@
 void kmain(boot_info_t *boot_info) {
     fb_init(&boot_info->framebuffer);
     tty_init();
-    OK("[Ok] Framebuffer at %p\n", boot_info->framebuffer.base_address);
+    OK("Framebuffer at %p\n", boot_info->framebuffer.base_address);
 
     pmm_init(&boot_info->mmap);
-    OK("[Ok] PMM init\n");
+    OK("PMM init\n");
 
     uintptr_t gdtr_addr = gdt_init();
-    OK("[Ok] GDT loaded at %p\n", gdtr_addr);
+    OK("GDT loaded at %p\n", gdtr_addr);
 
     uintptr_t idtr_addr = idt_init();
-    OK("[Ok] IDT loaded at %p\n", idtr_addr);
+    OK("IDT loaded at %p\n", idtr_addr);
 
     vmm_init(boot_info);
     OK("VMM init\n");
@@ -29,7 +29,6 @@ void kmain(boot_info_t *boot_info) {
     printf("Welcome to SchizoOS\n");
 
     pmm_info();
-
 
     for (;;) __asm__ volatile ("hlt");
 }
