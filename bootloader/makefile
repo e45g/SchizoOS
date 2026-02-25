@@ -2,9 +2,9 @@ ARCH ?= x86_64
 TARGET = BOOTX64.EFI
 
 # toolchain
-CC ?= gcc
+CC = gcc
 LD ?= ld
-OBJCOPY ?= objcopy
+OBJCOPY = x86_64-w64-mingw32-objcopy
 
 # gnu-efi paths
 EFI_INC = /usr/include/efi

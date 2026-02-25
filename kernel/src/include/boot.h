@@ -15,15 +15,12 @@ typedef struct {
     void* map_begin;
     uint64_t map_size;
     uint64_t descriptor_size;
-} memory_map_t;
+} mmap_t;
 
 typedef struct {
     framebuffer_t framebuffer;
-    memory_map_t  memory_map;
+    mmap_t  mmap;
     void* rsdp;
 } boot_info_t;
-
-framebuffer_t* get_framebuffer();
-memory_map_t* get_memmap();
 
 #endif

@@ -9,14 +9,16 @@ OBJCOPY ?= objcopy
 
 # srcs + build
 BUILD_DIR ?= ../build/kernel
+
+KERNEL_LD = linker.ld
 C_SRCS = $(shell find src -name '*.c')
 ASM_SRCS = $(shell find src -name '*.asm')
 C_OBJS = $(patsubst src/%.c,$(BUILD_DIR)/%.o,$(C_SRCS))
 ASM_OBJS = $(patsubst src/%.asm,$(BUILD_DIR)/%.o,$(ASM_SRCS))
 OBJS = $(C_OBJS) $(ASM_OBJS)
-KERNEL_LD = linker.ld
-
 ELF = $(BUILD_DIR)/$(TARGET)
+FONT_SRCS = $(shell find assets/fonts -name '*.psf')
+FONT_OBJS = $(patsubst assets/fonts/%.psf, $(BUILD_DIR)/fonts/%.o, $(FONT_SRCS))
 
 # flags
 CFLAGS = -I./src/include -ffreestanding \
@@ -41,8 +43,12 @@ LDFLAGS = -nostdlib \
 
 all: $(ELF)
 
-$(ELF): $(OBJS) | $(BUILD_DIR)
+$(ELF): $(OBJS) $(FONT_OBJS) | $(BUILD_DIR)
 	$(LD) $(LDFLAGS) $^ -o $@
+
+$(BUILD_DIR)/fonts/%.o: assets/fonts/%.psf
+	@mkdir -p $(dir $@)
+	$(OBJCOPY) -I binary -O elf64-x86-64 -B i386 $< $@
 
 $(BUILD_DIR):
 	mkdir -p $@

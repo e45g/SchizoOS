@@ -1,116 +1,92 @@
 #include <tty.h>
 
-static void print_unsigned(unsigned int value) {
-    if (value == 0) {
-        tty_putc('0');
-        return;
-    }
-    unsigned int div = 1;
-    while (value / div > 9) div *= 10;
-    while (div) {
-        tty_putc('0' + (value / div));
-        value %= div;
-        div /= 10;
+static void print_unsigned(uint64_t value, int base) {
+    char buf[64];
+    int i = 0;
+    const char *digits = "0123456789abcdef";
+
+    do {
+        buf[i++] = digits[value % base];
+        value /= base;
+    } while (value > 0);
+
+    while (i > 0) {
+        tty_putc(buf[--i]);
     }
 }
 
-static void print_signed(long value) {
+static void print_signed(int64_t value) {
     if (value < 0) {
         tty_putc('-');
-        if (value == INT_MIN) {
-            unsigned long u = (unsigned long)(-(value + 1)) + 1;
-            print_unsigned(u);
-            return;
-        }
         value = -value;
     }
-    print_unsigned((unsigned long)value);
+    print_unsigned((uint64_t)value, 10);
 }
 
-static void print_hex(long value, int digits) {
-    for(int i = digits-1; i >= 0; i--) {
-        unsigned long nibble = (value >> (i*4)) & 0xF;
-        if(i == 0 || nibble) {
-            tty_putc("0123456789abcdef"[nibble]);
-        }
+static void print_hex(uint64_t value, int width) {
+    for (int i = width - 1; i >= 0; i--) {
+        int nibble = (value >> (i * 4)) & 0xF;
+        tty_putc("0123456789abcdef"[nibble]);
     }
 }
+
 
 void printf(const char *fmt, ...) {
     va_list args;
     va_start(args, fmt);
 
     for (const char* p = fmt; *p != '\0'; p++) {
-        if(*p == '%' && *(p + 1) != '\0') {
+        if (*p == '%' && *(p + 1) != '\0') {
             p++;
             bool long_mode = false;
-            if(*p == 'l') {
+            if (*p == 'l') {
                 long_mode = true;
                 p++;
             }
-            switch(*p) {
+
+            switch (*p) {
                 case 's': {
                     char *s = va_arg(args, char*);
+                    if (!s) s = "(null)";
                     while (*s) tty_putc(*s++);
                     break;
                 }
                 case 'c': {
-                    char c = (char)va_arg(args, int);
-                    tty_putc(c);
+                    tty_putc((char)va_arg(args, int));
                     break;
                 }
-                case 'i':
-                case 'd': {
-                    if(long_mode) {
-                        long d = va_arg(args, long);
-                        print_signed(d);
-                    }
-                    else {
-                        int d = va_arg(args, int);
-                        print_signed((long)d);
-                    }
+                case 'd':
+                case 'i': {
+                    int64_t val = long_mode ? va_arg(args, int64_t) : (int64_t)va_arg(args, int);
+                    print_signed(val);
                     break;
                 }
-
                 case 'u': {
-                    if(long_mode) {
-                        unsigned long d = va_arg(args, unsigned long);
-                        print_unsigned(d);
-                    }
-                    else {
-                        unsigned int d = va_arg(args, unsigned int);
-                        print_unsigned((unsigned long)d);
-                    }
+                    uint64_t val = long_mode ? va_arg(args, uint64_t) : (uint64_t)va_arg(args, unsigned int);
+                    print_unsigned(val, 10);
                     break;
                 }
-
                 case 'x': {
-                    tty_putc('0');
-                    tty_putc('x');
-                    if (long_mode) {
-                        unsigned long value = va_arg(args, unsigned long);
-                        print_hex(value, sizeof(unsigned long) * 2);
-                    } else {
-                        unsigned int value = va_arg(args, unsigned int);
-                        print_hex((unsigned long)value, sizeof(unsigned int) * 2);
-                    }
+                    uint64_t val = long_mode ? va_arg(args, uint64_t) : (uint64_t)va_arg(args, unsigned int);
+                    print_unsigned(val, 16);
                     break;
                 }
                 case 'p': {
-                    void *ptr = va_arg(args, void *);
-                    unsigned long value = (unsigned long)ptr;
-
-                    tty_putc('0');
-                    tty_putc('x');
-                    for (int i = 7; i >= 0; i--) {
-                        int nibble = (value >> (i * 4)) & 0xF;
-                        tty_putc("0123456789abcdef"[nibble]);
-                    }
+                    uint64_t val = (uintptr_t)va_arg(args, void*);
+                    tty_putc('0'); tty_putc('x');
+                    print_hex(val, 16);
                     break;
                 }
+                case '%': {
+                    tty_putc('%');
+                    break;
+                }
+                default:
+                    tty_putc('%');
+                    tty_putc(*p);
+                    break;
             }
-        }
-        else{
+        } else {
             tty_putc(*p);
         }
     }

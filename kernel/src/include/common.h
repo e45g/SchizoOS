@@ -12,6 +12,7 @@
 #define INT_MIN (-__INT_MAX__  -1)
 #define LLONG_MIN (-__LONG_LONG_MAX__-1LL)
 #define LLONG_MAX __LONG_LONG_MAX__
+#define LONG_MIN (-__LONG_MAX__ -1)
 
 #if __SIZEOF_POINTER__ == 4
 typedef unsigned int uintptr_t;  // 32-bit pointer

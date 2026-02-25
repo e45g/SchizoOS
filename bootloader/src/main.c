@@ -1,3 +1,10 @@
+//
+//
+// EfiLoaderCode is marked as USABLE memory later in pmm_init()
+// EfiLoaderData persists
+//
+//
+
 #include "elf.h"
 #include "x86_64/efibind.h"
 #include <efi.h>
@@ -91,7 +98,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     EFI_GUID file_info_guid = EFI_FILE_INFO_ID;
     status = uefi_call_wrapper(kernel_file->GetInfo, 4, kernel_file, &file_info_guid, &info_size, file_info);
     if(status == EFI_BUFFER_TOO_SMALL) {
-        status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, info_size, (void **)&file_info);
+        status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderCode, info_size, (void **)&file_info);
         if (EFI_ERROR(status)) {
             Print(L"[Error] Could not allocate for file info\r\n");
             goto halt;
@@ -112,7 +119,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     Print(L"[Ok] Kernel size: %d bytes\r\n", kernel_file_size);
 
     UINT8 *kernel_buffer;
-    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, kernel_file_size, (void **)&kernel_buffer);
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderCode, kernel_file_size, (void **)&kernel_buffer);
     if (EFI_ERROR(status)) {
         Print(L"[Error] Could not allocate memory for kernel buffer\r\n");
         goto halt;
@@ -135,17 +142,12 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     Print(L"[Ok] Valid ELF64, entry: 0x%lx\r\n", elf->entry);
 
     elf64_phdr_t *phdr = (elf64_phdr_t *)(kernel_buffer + elf->phoff);
-    UINTN v_mem_start = INT64_MAX;
-    UINTN v_mem_end = 0;
     UINTN p_mem_start = INT64_MAX;
     UINTN p_mem_end = 0;
     for(INT32 i = 0; i < elf->phnum; i++, phdr++) {
         if(phdr->type == PT_LOAD) {
-            if(phdr->vaddr < v_mem_start) v_mem_start = phdr->vaddr;
-            if(phdr->vaddr > v_mem_end) v_mem_end = phdr->vaddr;
-
             if(phdr->paddr < p_mem_start) p_mem_start = phdr->paddr;
-            if(phdr->paddr > p_mem_end) p_mem_end = phdr->paddr;
+            if(phdr->paddr + phdr->memsz > p_mem_end) p_mem_end = phdr->paddr + phdr->memsz;
         }
     }
     UINTN memory_needed = p_mem_end - p_mem_start;
@@ -166,18 +168,10 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
             UINT8 *dst = (UINT8 *)phdr->paddr;
             UINT64 len = phdr->filesz;
 
-            status = uefi_call_wrapper(BS->CopyMem, 3, dst, src, len);
-            if (EFI_ERROR(status)) {
-                Print(L"[Error] Could not copy segment: %r\r\n", status);
-                goto halt;
-            }
+            uefi_call_wrapper(BS->CopyMem, 3, dst, src, len);
 
             if(phdr->memsz > phdr->filesz) {
-                status = uefi_call_wrapper(BS->SetMem, 3, dst + len, phdr->memsz - phdr->filesz, 0);
-                if (EFI_ERROR(status)) {
-                    Print(L"[Error] Could not zero BSS: %r\r\n", status);
-                    goto halt;
-                }
+                uefi_call_wrapper(BS->SetMem, 3, dst + len, phdr->memsz - phdr->filesz, 0);
             }
 
             Print(L"[Ok] Loaded segment to 0x%lx, size: %ld\n", dst, len);
@@ -203,7 +197,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     // allocated for the consequent call to GetMemoryMap() should be bigger then the value returned in MemoryMapSize,
     // since allocation of the new buffer may potentially increase memory map size.
     map_size += 4096;
-    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, map_size, (void **)&mem_map);
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderCode, map_size, (void **)&mem_map);
     if (EFI_ERROR(status)) {
         Print(L"[Error] Could not allocate memory for memory map\r\n");
         goto halt;
@@ -226,7 +220,8 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         map_size = 0;
         uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, NULL, &map_key, &desc_size, &desc_version);
         map_size += 4096;
-        uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, map_size, (void **)&mem_map);
+        uefi_call_wrapper(BS->FreePool, 1, mem_map);
+        uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderCode, map_size, (void **)&mem_map);
         uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
 
         boot_info.memory_map.map_size = map_size;

@@ -45,7 +45,7 @@ run: iso
 	    -bios $(OVMF) \
 	    -cdrom $(ISO) \
 	    -net none \
-		-m 16G
+		-m 4G
 
 debug: iso
 	qemu-system-x86_64 \
