@@ -107,7 +107,7 @@ void *pmm_alloc() {
         if((pmm.bitmap[i/8] & (1U << (i%8))) == 0) {
             pmm.last_hint = i+1;
             pmm_mark_used(i * PAGE_SIZE);
-            TRACE("PMM_ALLOC at %p\n", i * PAGE_SIZE);
+            // TRACE("PMM_ALLOC at %p\n", i * PAGE_SIZE);
             return (void*)(i * PAGE_SIZE);
         }
     }
@@ -116,6 +116,7 @@ void *pmm_alloc() {
         if((pmm.bitmap[i/8] & (1U << (i%8))) == 0) {
             pmm.last_hint = i+1;
             pmm_mark_used(i * PAGE_SIZE);
+            // TRACE("PMM_ALLOC at %p\n", i * PAGE_SIZE);
             return (void*)(i * PAGE_SIZE);
         }
     }

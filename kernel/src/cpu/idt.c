@@ -1,4 +1,4 @@
-#include <tty.h>
+#include <drivers/tty.h>
 #include <cpu/idt.h>
 #include <libk/stdio.h>
 
@@ -12,9 +12,9 @@ void exception_handler(uint32_t vector, uint32_t error_code) {
     tty_set_fg(TTY_WHITE);
     tty_set_bg(0x00660000);
 
-    tty_clear();
-    tty_set_x(0);
-    tty_set_y(0);
+    // tty_clear();
+    tty_set_x(400);
+    tty_set_y(300);
 
     printf("PANIC PANIC!!!\nWhat did you do!?\n\nException: %d\nError Code: %d\n", vector, error_code);
 
@@ -35,7 +35,7 @@ void idt_set_descriptor(uint8_t vector, void* offset, uint8_t flags) {
     descriptor->reserved       = 0;
 }
 
-
+void keyboard_stub();
 uintptr_t idt_init() {
     idtr.size = sizeof(idt) - 1;
     idtr.offset = (uintptr_t)&idt;
@@ -80,8 +80,9 @@ uintptr_t idt_init() {
         vectors[vector] = true;
     }
 
+    idt_set_descriptor(0x21, keyboard_stub, 0x8E);
+
     __asm__ volatile("lidt %0" : : "m"(idtr));
-    __asm__ volatile ("sti");
 
     return (uintptr_t)&idtr;
 }

@@ -4,7 +4,7 @@ TARGET = BOOTX64.EFI
 # toolchain
 CC = gcc
 LD ?= ld
-OBJCOPY = x86_64-w64-mingw32-objcopy
+OBJCOPY = objcopy
 
 # gnu-efi paths
 EFI_INC = /usr/include/efi
@@ -48,13 +48,16 @@ all: $(EFI)
 build:
 	mkdir -p $(BUILD_DIR)
 
+# i honestly have no idea why every time i update binutils this breaks
+# but its really annoying
 $(EFI): $(SO)
 	$(OBJCOPY) \
 	    -j .text -j .sdata -j .data -j .rodata \
 	    -j .dynamic -j .dynsym \
 	    -j .rel -j .rela -j .rel.* -j .rela.* \
 	    -j .reloc \
-	    --target efi-app-$(ARCH) \
+		--input-target=elf64-x86-64 \
+		--output-target=efi-app-x86_64 \
 	    --subsystem=10 \
 	    $< $@
 

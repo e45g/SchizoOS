@@ -29,13 +29,19 @@ enum log_levels {
 #define TRACE(msg, ...)                                                                              \
     do {                                                                                             \
         if(DEBUG_LEVEL >= LOG_TRACE)                                                                  \
-            printf(DEBUG_SRC "\x1b[38;2;13;15;18;45m trace \x1b[49;35m " msg "\x1b[0m", __FILE__, __LINE__, ##__VA_ARGS__);  \
+            printf(DEBUG_SRC "\x1b[38;2;13;15;18;45m trace \x1b[49;35m " msg "\x1b[0m", ##__VA_ARGS__);  \
     } while (0)
 
 #define OK(msg, ...)                                                                              \
     do {                                                                                             \
         if(DEBUG_LEVEL >= LOG_TRACE)                                                                  \
-            printf(DEBUG_SRC "\x1b[38;2;13;15;18;48;2;113;180;141m ok    \x1b[49;38;2;113;180;141m " msg "\x1b[0m", __FILE__, __LINE__, ##__VA_ARGS__);  \
+            printf(DEBUG_SRC "\x1b[38;2;13;15;18;48;2;113;180;141m ok    \x1b[49;38;2;113;180;141m " msg "\x1b[0m", ##__VA_ARGS__);  \
+    } while (0)
+
+#define ERROR(msg, ...)                                                                              \
+    do {                                                                                             \
+        if(DEBUG_LEVEL >= LOG_ERROR)                                                                  \
+            printf(DEBUG_SRC "\x1b[38;2;13;15;18;101m error \x1b[49;91m " msg "\x1b[0m", ##__VA_ARGS__);  \
     } while (0)
 
 

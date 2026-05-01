@@ -40,5 +40,6 @@ uintptr_t gdt_init()
         :
         : "rax", "memory"
     );
+
     return (uintptr_t)&gdtr;
 }

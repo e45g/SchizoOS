@@ -32,7 +32,7 @@ kernel:
 
 iso: $(EFI) $(KERNEL_ELF)
 	rm -rf $(ISO_DIR) && mkdir -p $(ISO_DIR)
-	dd if=/dev/zero of=$(EFI_IMG) bs=1M count=4
+	dd if=/dev/zero of=$(EFI_IMG) bs=1M count=1
 	mformat -i $(EFI_IMG) ::
 	mmd -i $(EFI_IMG) ::/EFI ::/EFI/BOOT
 	mcopy -i $(EFI_IMG) $(EFI) ::/EFI/BOOT/BOOTX64.EFI

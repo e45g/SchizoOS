@@ -8,13 +8,13 @@
 #define PAGE_SHIFT 12
 
 enum pml4e_flags {
-  VMM_PRESENT = 1ULL << 0,
-  VMM_RW = 1ULL << 1,
-  VMM_US = 1ULL << 2,
-  VMM_PWT = 1ULL << 3,
-  VMM_PCD = 1ULL << 4,
-  VMM_A = 1ULL << 5,
-  VMM_XD = 1ULL << 63,
+  PAGE_PRESENT = 1ULL << 0,
+  PAGE_RW = 1ULL << 1,
+  PAGE_US = 1ULL << 2,
+  PAGE_PWT = 1ULL << 3,
+  PAGE_PCD = 1ULL << 4,
+  PAGE_A = 1ULL << 5,
+  PAGE_XD = 1ULL << 63,
 };
 
 typedef enum {
@@ -58,7 +58,7 @@ void pmm_free(void *addr);
 void pmm_info(void);
 
 void vmm_init(boot_info_t *boot_info);
-void vmm_map(uintptr_t vaddr, uintptr_t paddr);
+void vmm_map(uintptr_t vaddr, uintptr_t paddr, uint64_t flags);
 
 
 #endif

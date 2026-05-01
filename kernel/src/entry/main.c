@@ -1,13 +1,15 @@
-#include "debug.h"
+#include <debug.h>
 #include <cpu/idt.h>
 #include <common.h>
 #include <boot.h>
-#include <tty.h>
+#include <drivers/tty.h>
 #include <libk/stdio.h>
 #include <libk/string.h>
 #include <memory.h>
 #include <cpu/gdt.h>
+#include <drivers/keyboard.h>
 #include <video.h>
+#include <cpu/acpi.h>
 
 void kmain(boot_info_t *boot_info) {
     fb_init(&boot_info->framebuffer);
@@ -23,12 +25,19 @@ void kmain(boot_info_t *boot_info) {
     uintptr_t idtr_addr = idt_init();
     OK("IDT loaded at %p\n", idtr_addr);
 
-    vmm_init(boot_info);
-    OK("VMM init\n");
+    // vmm_init(boot_info);
+    // OK("VMM init\n");
+
+    acpi_init(boot_info->rsdp);
+    __asm__ volatile("sti");
 
     printf("Welcome to SchizoOS\n");
-
     pmm_info();
+
+    while(1) {
+        char c = getchar();
+        printf("%c", c);
+    }
 
     for (;;) __asm__ volatile ("hlt");
 }

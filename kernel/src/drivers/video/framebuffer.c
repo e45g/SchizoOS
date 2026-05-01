@@ -5,7 +5,8 @@
 
 #include <psf.h>
 
-extern char _binary_assets_fonts_zap_vga16_psf_start;
+// extern char _binary_assets_fonts_zap_vga16_psf_start;
+extern char _binary_assets_fonts_terminus_psf_start;
 static uint32_t* fb_base;
 static uint32_t fb_width;
 static uint32_t fb_height;
@@ -23,7 +24,7 @@ void fb_init(framebuffer_t *fb) {
     fb_height = fb->height;
     fb_pitch = fb->pixels_per_scanline;
 
-    void* raw_font = &_binary_assets_fonts_zap_vga16_psf_start;
+    void* raw_font = &_binary_assets_fonts_terminus_psf_start;
     psf2_t *font2 = (psf2_t *)raw_font;
     psf1_t *font1 = (psf1_t *)raw_font;
 

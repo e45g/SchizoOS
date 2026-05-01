@@ -22,22 +22,36 @@ typedef struct {
     void* map_begin;
     uint64_t map_size;
     uint64_t descriptor_size;
-} memory_map_t;
+} mmap_t;
 
 typedef struct {
     framebuffer_t framebuffer;
-    memory_map_t  memory_map;
+    mmap_t  mmap;
     void* rsdp;
 } boot_info_t;
 
 typedef void (*kernel_entry_t)(boot_info_t *);
 
+// CompareGuid and RtCompareGuid act very very weird so there we go
+static inline BOOLEAN GuidEqual(EFI_GUID *a, EFI_GUID *b) {
+    UINT64 *x = (UINT64*)a;
+    UINT64 *y = (UINT64*)b;
+    return x[0] == y[0] && x[1] == y[1];
+}
+
 EFI_STATUS
 EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
-    boot_info_t boot_info = {0};
     EFI_STATUS status;
     InitializeLib(ImageHandle, SystemTable);
     Print(L"[Boot] UEFI Bootloader starting...\r\n");
+
+    boot_info_t *boot_info;
+    status = uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderData, sizeof(boot_info_t), (void **)&boot_info);
+    if (EFI_ERROR(status)) {
+        Print(L"[Error] Could not allocate boot_info\r\n");
+        goto halt;
+    }
+    *boot_info = (boot_info_t){0};
 
     EFI_GRAPHICS_OUTPUT_PROTOCOL *gop;
     EFI_GUID gop_guid = EFI_GRAPHICS_OUTPUT_PROTOCOL_GUID;
@@ -48,17 +62,48 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"[Error] Could not locate GOP: %r\r\n", status);
         goto halt;
     }
-    boot_info.framebuffer.base_address = (void*)gop->Mode->FrameBufferBase;
-    boot_info.framebuffer.buffer_size = gop->Mode->FrameBufferSize;
-    boot_info.framebuffer.width = gop->Mode->Info->HorizontalResolution;
-    boot_info.framebuffer.height = gop->Mode->Info->VerticalResolution;
-    boot_info.framebuffer.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
+    boot_info->framebuffer.base_address = (void*)gop->Mode->FrameBufferBase;
+    boot_info->framebuffer.buffer_size = gop->Mode->FrameBufferSize;
+    boot_info->framebuffer.width = gop->Mode->Info->HorizontalResolution;
+    boot_info->framebuffer.height = gop->Mode->Info->VerticalResolution;
+    boot_info->framebuffer.pixels_per_scanline = gop->Mode->Info->PixelsPerScanLine;
 
     Print(L"[Ok] GOP: %dx%d, FB at 0x%lx\r\n",
           gop->Mode->Info->HorizontalResolution,
           gop->Mode->Info->VerticalResolution,
           gop->Mode->FrameBufferBase);
 
+    // Get RSDP
+    EFI_GUID acpi20_guid = ACPI_20_TABLE_GUID;
+    EFI_GUID acpi10_guid = ACPI_TABLE_GUID;
+    BOOLEAN found = FALSE;
+
+    for(UINTN i = 0; i < SystemTable->NumberOfTableEntries; i++) {
+        EFI_GUID *g = &SystemTable->ConfigurationTable[i].VendorGuid;
+        Print(L"[Table %d] %p | %08x-%04x-%04x-%02x%02x-%02x%02x%02x%02x%02x%02x\r\n",
+                i,
+                SystemTable->ConfigurationTable[i].VendorTable,
+                g->Data1, g->Data2, g->Data3,
+                g->Data4[0], g->Data4[1],
+                g->Data4[2], g->Data4[3],
+                g->Data4[4], g->Data4[5],
+                g->Data4[6], g->Data4[7]);
+
+        if(GuidEqual(g, &acpi20_guid) == 1) {
+            found = TRUE;
+            boot_info->rsdp = SystemTable->ConfigurationTable[i].VendorTable;
+            break;
+        }
+        if(GuidEqual(g, &acpi10_guid) == 1) {
+            found = TRUE;
+            boot_info->rsdp = SystemTable->ConfigurationTable[i].VendorTable;
+        }
+    }
+    if(found == FALSE) {
+        Print(L"ACPI table not found\r\n");
+        goto halt;
+    }
+    Print(L"[Ok] RSDP at %p\r\n", boot_info->rsdp);
 
     // Load kernel
     EFI_LOADED_IMAGE_PROTOCOL *loaded_img;
@@ -208,9 +253,9 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         Print(L"[Error] Could not get memory map\r\n");
         goto halt;
     }
-    boot_info.memory_map.map_size = map_size;
-    boot_info.memory_map.descriptor_size = desc_size;
-    boot_info.memory_map.map_begin = mem_map;
+    boot_info->mmap.map_size = map_size;
+    boot_info->mmap.descriptor_size = desc_size;
+    boot_info->mmap.map_begin = mem_map;
 
     Print(L"[Ok] Jumping to kernel...\r\n");
 
@@ -224,9 +269,9 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
         uefi_call_wrapper(BS->AllocatePool, 3, EfiLoaderCode, map_size, (void **)&mem_map);
         uefi_call_wrapper(BS->GetMemoryMap, 5, &map_size, mem_map, &map_key, &desc_size, &desc_version);
 
-        boot_info.memory_map.map_size = map_size;
-        boot_info.memory_map.descriptor_size = desc_size;
-        boot_info.memory_map.map_begin = mem_map;
+        boot_info->mmap.map_size = map_size;
+        boot_info->mmap.descriptor_size = desc_size;
+        boot_info->mmap.map_begin = mem_map;
         status = uefi_call_wrapper(BS->ExitBootServices, 2, ImageHandle, map_key);
         if (EFI_ERROR(status)) {
             goto halt;
@@ -234,7 +279,7 @@ EFIAPI efi_main(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
     }
 
     kernel_entry_t kernel_entry = (kernel_entry_t)elf->entry;
-    kernel_entry(&boot_info);
+    kernel_entry(boot_info);
 
 halt:
     for(;;) __asm__ volatile("hlt");

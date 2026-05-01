@@ -1,6 +1,6 @@
 #include <boot.h>
 #include <video.h>
-#include <tty.h>
+#include <drivers/tty.h>
 
 static tty_t tty;
 
@@ -69,11 +69,11 @@ static void tty_ansi_sgr() {
             tty.bg = tty.def_bg;
         }
         else if(v >= 90 && v <= 97) {
-            tty.fg = ansi_color_table[v-90];
+            tty.fg = ansi_color_table[v-82];
         }
 
         else if(v >= 100 && v <= 107) {
-            tty.fg = ansi_color_table[v-100];
+            tty.bg = ansi_color_table[v-92];
         }
         else if(v == 38 && i + 1 < nparams) {
             uint8_t mode = params[i+1];

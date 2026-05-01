@@ -1,6 +1,6 @@
--I./src/include
+-Isrc/include
 -ffreestanding
--nostdlib
+-nostdinc
 -fno-stack-protector
 -mno-red-zone
 -m64
